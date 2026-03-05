@@ -42,7 +42,10 @@ final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(temperatureUnit.rawValue, forKey: "tempUnit") }
     }
     @Published var launchAtLogin: Bool {
-        didSet { toggleLaunchAtLogin() }
+        didSet {
+            guard launchAtLogin != oldValue else { return }
+            toggleLaunchAtLogin()
+        }
     }
 
     enum TemperatureUnit: String, CaseIterable, Identifiable {
@@ -52,6 +55,7 @@ final class AppSettings: ObservableObject {
 
     // Debounce timers for expensive JSON saves
     private var saveTimers: [String: Timer] = [:]
+    private var isUpdatingLaunchAtLogin = false
 
     init() {
         // Migrate old fan curve format (v1 used "rpm", v2 uses "percent")
@@ -71,7 +75,7 @@ final class AppSettings: ObservableObject {
         self.activeCurveId = UserDefaults.standard.string(forKey: "activeCurveId")
             .flatMap { UUID(uuidString: $0) }
         let stored = UserDefaults.standard.double(forKey: "pollInterval")
-        self.pollInterval = stored > 0 ? stored : 2.0
+        self.pollInterval = stored > 0 ? stored : 1.0
         self.showTemperatureInMenuBar = UserDefaults.standard.object(forKey: "showTempMenuBar") as? Bool ?? true
         self.temperatureUnit = TemperatureUnit(rawValue:
             UserDefaults.standard.string(forKey: "tempUnit") ?? "celsius") ?? .celsius
@@ -85,6 +89,10 @@ final class AppSettings: ObservableObject {
     }
 
     private func toggleLaunchAtLogin() {
+        guard !isUpdatingLaunchAtLogin else { return }
+        isUpdatingLaunchAtLogin = true
+        defer { isUpdatingLaunchAtLogin = false }
+
         let service = SMAppService.mainApp
         do {
             if launchAtLogin {
@@ -93,14 +101,23 @@ final class AppSettings: ObservableObject {
                 try service.unregister()
             }
         } catch {
-            DispatchQueue.main.async { [weak self] in
-                self?.launchAtLogin = SMAppService.mainApp.status == .enabled
+            // Revert to actual state without re-triggering didSet loop
+            let actualState = SMAppService.mainApp.status == .enabled
+            if launchAtLogin != actualState {
+                isUpdatingLaunchAtLogin = true
+                launchAtLogin = actualState
+                isUpdatingLaunchAtLogin = false
             }
         }
     }
 
     func refreshLaunchAtLoginState() {
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        let actualState = SMAppService.mainApp.status == .enabled
+        if launchAtLogin != actualState {
+            isUpdatingLaunchAtLogin = true
+            launchAtLogin = actualState
+            isUpdatingLaunchAtLogin = false
+        }
     }
 
     /// Debounced save — waits 0.5s after last change before writing JSON to disk.

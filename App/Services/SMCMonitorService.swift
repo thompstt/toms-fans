@@ -1,7 +1,7 @@
 import Foundation
 import IOKit
 
-struct TemperatureReading: Identifiable {
+struct TemperatureReading: Identifiable, Equatable {
     let id: Int  // Sequential counter, not UUID (avoids allocation)
     let date: Date
     let value: Double
@@ -16,16 +16,38 @@ final class SMCMonitorService: ObservableObject {
     private var _fullHistory: [String: [TemperatureReading]] = [:]
     @Published var menuBarLabel: String = "--°C"
     @Published var isConnected = false
+    private(set) var sensorNames: [String: String] = [:]
 
     private var reader: SMCReader?
     private let connection = SMCConnection()
     private var timer: Timer?
-    private var pollInterval: TimeInterval = 2.0
+    private var pollInterval: TimeInterval = 1.0
+    private var currentInterval: TimeInterval = 1.0
+    private let idlePollInterval: TimeInterval = 5.0
     private let maxHistoryPoints = 1800
     private var readingCounter = 0
     private var pollCount = 0
 
+    var isCollectingHistory = true
+
+    func clearHistory() {
+        _fullHistory.removeAll()
+        chartHistory.removeAll()
+    }
+
     var onPoll: (([TemperatureSensor]) -> Void)?
+
+    // MARK: - Cached Summary Temps (updated during poll, no allocations on read)
+
+    private(set) var cpuPackageTemp: Double = 0
+    private(set) var gpuTemp: Double = 0
+
+    private func updateSummaryTemps(_ sensors: [TemperatureSensor]) {
+        cpuPackageTemp = sensors.first(where: { $0.key == "TCXC" })?.value
+            ?? sensors.filter({ $0.key.hasPrefix("TC") }).map(\.value).max()
+            ?? 0
+        gpuTemp = sensors.first(where: { $0.key == "TG0P" })?.value ?? 0
+    }
 
     init() {
         do {
@@ -47,20 +69,20 @@ final class SMCMonitorService: ObservableObject {
     func updatePollInterval(_ interval: TimeInterval) {
         guard interval != pollInterval, interval > 0 else { return }
         pollInterval = interval
+        // Only restart if we're using the active rate
+        if currentInterval != idlePollInterval {
+            currentInterval = interval
+            timer?.invalidate()
+            startPolling()
+        }
+    }
+
+    func setIdleMode(_ idle: Bool) {
+        let target = idle ? idlePollInterval : pollInterval
+        guard target != currentInterval else { return }
+        currentInterval = target
         timer?.invalidate()
         startPolling()
-    }
-
-    // MARK: - Cached Computed Properties
-
-    var cpuPackageTemp: Double {
-        temperatures.first(where: { $0.key == "TCXC" })?.value
-            ?? temperatures.filter({ $0.key.hasPrefix("TC") }).map(\.value).max()
-            ?? 0
-    }
-
-    var gpuTemp: Double {
-        temperatures.first(where: { $0.key == "TG0P" })?.value ?? 0
     }
 
     // MARK: - Private
@@ -80,6 +102,8 @@ final class SMCMonitorService: ObservableObject {
             let fanModels = (0..<fanCount).map { Fan(index: $0) }
 
             DispatchQueue.main.async {
+                self.sensorNames = Dictionary(uniqueKeysWithValues: tempModels.map { ($0.key, $0.name) })
+                self.updateSummaryTemps(tempModels)
                 self.temperatures = tempModels
                 self.fans = fanModels
                 self.poll()
@@ -88,10 +112,10 @@ final class SMCMonitorService: ObservableObject {
     }
 
     private func startPolling() {
-        timer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: currentInterval, repeats: true) { [weak self] _ in
             self?.poll()
         }
-        timer?.tolerance = 0.5
+        timer?.tolerance = currentInterval * 0.3
     }
 
     private func poll() {
@@ -108,13 +132,16 @@ final class SMCMonitorService: ObservableObject {
                 }
             }
 
-            // Read fan data
+            // Read fan data (min/max are static — only refresh every 60 polls)
+            let readStaticFanData = (self.pollCount % 60 == 0) || self.pollCount <= 2
             var updatedFans = self.fans
             for i in updatedFans.indices {
                 let idx = updatedFans[i].index
                 updatedFans[i].actualRPM = (try? reader.fanActualSpeed(fanIndex: idx)) ?? 0
-                updatedFans[i].minRPM = (try? reader.fanMinSpeed(fanIndex: idx)) ?? 0
-                updatedFans[i].maxRPM = (try? reader.fanMaxSpeed(fanIndex: idx)) ?? 0
+                if readStaticFanData {
+                    updatedFans[i].minRPM = (try? reader.fanMinSpeed(fanIndex: idx)) ?? 0
+                    updatedFans[i].maxRPM = (try? reader.fanMaxSpeed(fanIndex: idx)) ?? 0
+                }
                 if let (_, bytes) = try? reader.readKey(SMCKey.fanTarget(idx)) {
                     updatedFans[i].targetRPM = Double(flt: bytes)
                 }
@@ -122,21 +149,28 @@ final class SMCMonitorService: ObservableObject {
 
             DispatchQueue.main.async {
                 self.pollCount += 1
+                let isFirstPoll = self.pollCount <= 2
 
                 // Only publish temperatures if any sensor changed by >= 1°C
-                let tempsChanged = self.temperatures.count != updatedTemps.count
+                // Always publish on first polls to ensure UI gets initial data
+                let tempsChanged = isFirstPoll
+                    || self.temperatures.count != updatedTemps.count
                     || zip(self.temperatures, updatedTemps).contains { abs($0.value - $1.value) >= 1.0 }
                 if tempsChanged {
+                    self.updateSummaryTemps(updatedTemps)
                     self.temperatures = updatedTemps
                 }
 
-                // Only publish fans when values actually changed
-                if self.fans != updatedFans {
+                // Only publish fans when any RPM changed by >= 50
+                let fansChanged = isFirstPoll
+                    || self.fans.count != updatedFans.count
+                    || zip(self.fans, updatedFans).contains { abs($0.actualRPM - $1.actualRPM) >= 50.0 }
+                if fansChanged {
                     self.fans = updatedFans
                 }
 
-                // Append history every 5th poll (~10s) to reduce chart rebuilds
-                if self.pollCount % 5 == 0 {
+                // Append history every 5th poll (~5s) to reduce chart rebuilds
+                if self.pollCount % 5 == 0, self.isCollectingHistory {
                     self.appendHistory(updatedTemps)
                 }
 
@@ -146,7 +180,11 @@ final class SMCMonitorService: ObservableObject {
                     self.menuBarLabel = newLabel
                 }
 
-                self.onPoll?(updatedTemps)
+                // Only invoke poll callback when temperatures changed —
+                // curve engine and notifications only care about temps
+                if tempsChanged {
+                    self.onPoll?(updatedTemps)
+                }
             }
         }
     }

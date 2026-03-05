@@ -4,6 +4,7 @@ struct MenuBarView: View {
     @EnvironmentObject var monitor: SMCMonitorService
     @EnvironmentObject var fanControl: XPCFanControlService
     @EnvironmentObject var settings: AppSettings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -97,13 +98,9 @@ struct MenuBarView: View {
             // Actions
             VStack(spacing: 2) {
                 MenuBarAction(title: "Show Main Window", icon: "macwindow") {
+                    NSApp.setActivationPolicy(.regular)
+                    openWindow(id: "main")
                     NSApp.activate(ignoringOtherApps: true)
-                    for window in NSApp.windows {
-                        if window.title == "Tom's Fans" {
-                            window.makeKeyAndOrderFront(nil)
-                            break
-                        }
-                    }
                 }
 
                 MenuBarAction(title: "Quit Tom's Fans", icon: "power") {

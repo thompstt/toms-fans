@@ -7,14 +7,14 @@ struct CurvePoint: Identifiable, Codable, Hashable {
 
     init(temperature: Double, percent: Int) {
         self.id = UUID()
-        self.temperature = temperature
+        self.temperature = min(max(temperature, 0), 100)
         self.percent = min(max(percent, 0), 100)
     }
 
     /// Preserves identity during drag operations.
     init(id: UUID, temperature: Double, percent: Int) {
         self.id = id
-        self.temperature = temperature
+        self.temperature = min(max(temperature, 0), 100)
         self.percent = min(max(percent, 0), 100)
     }
 }
@@ -70,14 +70,15 @@ struct FanCurve: Identifiable, Codable, Hashable {
     }
 
     static let defaultCurve = FanCurve(
-        name: "Default Cooling",
-        sensorKey: "TCXC",
+        name: "Tom's Optimized Curve",
+        sensorKey: "TCMX",
         controlPoints: [
-            CurvePoint(temperature: 40, percent: 0),
-            CurvePoint(temperature: 60, percent: 25),
-            CurvePoint(temperature: 75, percent: 50),
-            CurvePoint(temperature: 85, percent: 75),
+            CurvePoint(temperature: 0, percent: 0),
+            CurvePoint(temperature: 30, percent: 20),
+            CurvePoint(temperature: 55, percent: 45),
+            CurvePoint(temperature: 80, percent: 80),
             CurvePoint(temperature: 95, percent: 100),
+            CurvePoint(temperature: 100, percent: 100),
         ],
         appliesToFans: [0, 1]
     )

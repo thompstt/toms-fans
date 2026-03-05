@@ -4,6 +4,7 @@ import Foundation
 /// Reads temperatures, fan speeds, and discovers available sensors.
 final class SMCReader {
     private let connection: SMCConnection
+    private var keyInfoCache: [FourCharCode: SMCKeyInfoData] = [:]
 
     init(connection: SMCConnection) {
         self.connection = connection
@@ -11,12 +12,14 @@ final class SMCReader {
 
     // MARK: - Key Info
 
-    /// Get the data type and size for an SMC key.
+    /// Get the data type and size for an SMC key (cached after first lookup).
     func getKeyInfo(_ key: FourCharCode) throws -> SMCKeyInfoData {
+        if let cached = keyInfoCache[key] { return cached }
         var input = SMCParamStruct()
         input.key = key
         input.data8 = SMCSelector.kSMCGetKeyInfo.rawValue
         let output = try connection.callDriver(input: &input)
+        keyInfoCache[key] = output.keyInfo
         return output.keyInfo
     }
 

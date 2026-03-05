@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 63;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -37,6 +37,7 @@
 		DB8288A37CF554408F7515F3 /* XPCFanControlService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D52E5A1B7F1A476FE09B0FB /* XPCFanControlService.swift */; };
 		E1C75D9776913672B774A665 /* FanGaugeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECD97A3BEA02C21155F67BB1 /* FanGaugeView.swift */; };
 		E36FF662E3758F8787E80AFC /* com.tomsfans.helper in Resources */ = {isa = PBXBuildFile; fileRef = 1C28C99B7EEE52B984602AF1 /* com.tomsfans.helper */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E4A1B2C3D4E5F6A7B8C9D0E1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets */; };
 		E59777273B4523139A6F6A8D /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAE415AA3D435351A841DFE9 /* main.swift */; };
 		E73C2C6489843CD0876B33C7 /* SMCConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F30F64B6BCCF8BDA8FE5CED0 /* SMCConnection.swift */; };
 		E83FDD325CB860AA5DA5F15F /* SMCParamStruct.swift in Sources */ = {isa = PBXBuildFile; fileRef = B661B702991170974ED7A8AB /* SMCParamStruct.swift */; };
@@ -57,8 +58,9 @@
 
 /* Begin PBXFileReference section */
 		0BD4B49B5E5C0CA001540EA4 /* FanControlServiceImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FanControlServiceImpl.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1350EE35B143206D78C28EA3 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
-		1C28C99B7EEE52B984602AF1 /* com.tomsfans.helper */ = {isa = PBXFileReference; includeInIndex = 0; path = com.tomsfans.helper; sourceTree = BUILT_PRODUCTS_DIR; };
+		1C28C99B7EEE52B984602AF1 /* com.tomsfans.helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.tomsfans.helper; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A5B14DFC218427E225920E0 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		2D52E5A1B7F1A476FE09B0FB /* XPCFanControlService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XPCFanControlService.swift; sourceTree = "<group>"; };
 		367EFD32C8E1FB6C9208D008 /* FanCurve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FanCurve.swift; sourceTree = "<group>"; };
@@ -184,9 +186,18 @@
 			children = (
 				F8B1B5F085997F5A8AE57736 /* App */,
 				87F307F4C2ECB22AF34009D4 /* Helper */,
+				C1D2E3F4A5B6C7D8E9F0A1B2 /* Resources */,
 				3461145C1DF0A8C79F006732 /* Shared */,
 				34CA9F8322AF118473CD6297 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		C1D2E3F4A5B6C7D8E9F0A1B2 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* Assets.xcassets */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		D60B19DBBC3361D45EC03D60 /* Views */ = {
@@ -292,7 +303,6 @@
 			);
 			mainGroup = CEE092C3F2129E5E66227D90;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -307,6 +317,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E4A1B2C3D4E5F6A7B8C9D0E1 /* Assets.xcassets in Resources */,
 				E36FF662E3758F8787E80AFC /* com.tomsfans.helper in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -463,6 +474,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;

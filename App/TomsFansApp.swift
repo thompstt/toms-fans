@@ -1,4 +1,6 @@
+import Combine
 import SwiftUI
+import UserNotifications
 
 @main
 struct TomsFansApp: App {
@@ -20,8 +22,19 @@ struct TomsFansApp: App {
                 .environmentObject(settings)
                 .environmentObject(notifications)
                 .onAppear {
-                    // Wire up on main window open (fires on launch)
                     bootstrapIfNeeded()
+                    monitor.isCollectingHistory = true
+                    monitor.setIdleMode(false)
+                    NSApp.setActivationPolicy(.regular)
+                }
+                .onDisappear {
+                    monitor.isCollectingHistory = false
+                    monitor.clearHistory()
+                    monitor.setIdleMode(true)
+                    NSApp.setActivationPolicy(.accessory)
+                    if !AppDelegate.isTerminating {
+                        sendMenuBarNotification()
+                    }
                 }
         }
         .defaultSize(width: 900, height: 650)
@@ -50,13 +63,25 @@ struct TomsFansApp: App {
     }
 
     private static var hasBootstrapped = false
+    private static var cancellables: Set<AnyCancellable> = []
 
     private func bootstrapIfNeeded() {
         guard !Self.hasBootstrapped else { return }
         Self.hasBootstrapped = true
+        monitor.updatePollInterval(settings.pollInterval)
         setupPollCallback()
         notifications.setup()
         reapplySavedMode()
+        observePollIntervalChanges()
+    }
+
+    private func observePollIntervalChanges() {
+        settings.$pollInterval
+            .dropFirst()
+            .sink { [weak monitor] interval in
+                monitor?.updatePollInterval(interval)
+            }
+            .store(in: &Self.cancellables)
     }
 
     private func setupPollCallback() {
@@ -77,6 +102,14 @@ struct TomsFansApp: App {
 
             notifications?.checkThresholds(temperatures: temps, thresholds: settings.alertThresholds)
         }
+    }
+
+    private func sendMenuBarNotification() {
+        let content = UNMutableNotificationContent()
+        content.title = "Tom's Fans is still running"
+        content.body = "Fan control is active in the menu bar. Click the menu bar icon to reopen the window or quit."
+        let request = UNNotificationRequest(identifier: "window-closed", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 
     /// Re-apply the persisted control mode on launch.
@@ -106,8 +139,13 @@ struct TomsFansApp: App {
 
 /// Minimal AppDelegate for lifecycle control.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    static var isTerminating = false
+
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool {
-        // Keep running in menu bar when window is closed
         false
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        Self.isTerminating = true
     }
 }

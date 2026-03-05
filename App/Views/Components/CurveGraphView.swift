@@ -11,8 +11,8 @@ struct CurveGraphView: View {
     @State private var isHovering = false
 
     private let snapUnit: Double = 5
-    private let tempMin: Double = 20
-    private let tempMax: Double = 110
+    private let tempMin: Double = 0
+    private let tempMax: Double = 100
     private let pctMin: Double = 0
     private let pctMax: Double = 100
     private let hitRadius: CGFloat = 14
@@ -36,6 +36,7 @@ struct CurveGraphView: View {
                 drawCurrentTemp(ctx: ctx, plot: plot)
                 drawPoints(ctx: ctx, plot: plot, sorted: sorted)
             }
+            .drawingGroup()
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in

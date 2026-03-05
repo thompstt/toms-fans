@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 struct SensorGroup: Identifiable {
     let category: SensorCategory
@@ -42,7 +41,7 @@ struct SensorGroup: Identifiable {
 
 // MARK: - Extracted Child Views
 
-struct SummaryStripView: View {
+struct SummaryStripView: View, Equatable {
     let cpuTemp: Double
     let gpuTemp: Double
     let fans: [Fan]
@@ -73,13 +72,21 @@ struct SummaryStripView: View {
     }
 }
 
-struct ModeSelectionView: View {
+struct ModeSelectionView: View, Equatable {
     let controlMode: FanControlMode
     let automaticSubtitle: String
     let manualSubtitle: String
     let presetSubtitle: String
     let curveSubtitle: String
     let onSelectMode: (FanControlMode) -> Void
+
+    static func == (lhs: ModeSelectionView, rhs: ModeSelectionView) -> Bool {
+        lhs.controlMode == rhs.controlMode
+            && lhs.automaticSubtitle == rhs.automaticSubtitle
+            && lhs.manualSubtitle == rhs.manualSubtitle
+            && lhs.presetSubtitle == rhs.presetSubtitle
+            && lhs.curveSubtitle == rhs.curveSubtitle
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -157,7 +164,7 @@ struct SensorSidebarView: View {
     }
 }
 
-struct TemperatureChartSection: View {
+struct TemperatureChartSection: View, Equatable {
     let chartSensorKeys: Set<String>
     let chartHistory: [String: [TemperatureReading]]
     let sensorNames: [String: String]
@@ -257,10 +264,14 @@ struct ManualFanControlSection: View {
     }
 }
 
-struct PresetSection: View {
+struct PresetSection: View, Equatable {
     let presets: [FanPreset]
     let activePresetId: UUID?
     let onSelect: (FanPreset) -> Void
+
+    static func == (lhs: PresetSection, rhs: PresetSection) -> Bool {
+        lhs.presets == rhs.presets && lhs.activePresetId == rhs.activePresetId
+    }
 
     var body: some View {
         GroupBox("Presets") {
@@ -353,7 +364,7 @@ struct DashboardView: View {
 
     private var mainPanel: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            LazyVStack(alignment: .center, spacing: 12) {
                 SummaryStripView(
                     cpuTemp: monitor.cpuPackageTemp,
                     gpuTemp: monitor.gpuTemp,
@@ -375,9 +386,7 @@ struct DashboardView: View {
                 TemperatureChartSection(
                     chartSensorKeys: chartSensorKeys,
                     chartHistory: monitor.chartHistory,
-                    sensorNames: Dictionary(
-                        uniqueKeysWithValues: monitor.temperatures.map { ($0.key, $0.name) }
-                    )
+                    sensorNames: monitor.sensorNames
                 )
 
                 if settings.controlMode == .manual {
@@ -467,8 +476,8 @@ struct DashboardView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             Picker("Sensor", selection: curveBinding.sensorKey) {
-                                ForEach(monitor.temperatures.filter { $0.key.hasPrefix("TC") || $0.key.hasPrefix("TG") }) { sensor in
-                                    Text("\(sensor.name)").tag(sensor.key)
+                                ForEach(monitor.sensorNames.filter { $0.key.hasPrefix("TC") || $0.key.hasPrefix("TG") }.sorted(by: { $0.key < $1.key }), id: \.key) { key, name in
+                                    Text(name).tag(key)
                                 }
                             }
                             .labelsHidden()
@@ -514,7 +523,7 @@ struct DashboardView: View {
 
                     CurveGraphView(
                         controlPoints: curveBinding.controlPoints,
-                        currentTemp: monitor.temperatures.first(where: { $0.key == settings.fanCurves[editingCurveIndex].sensorKey })?.value
+                        currentTemp: monitor.temperatures.first(where: { $0.key == settings.fanCurves[editingCurveIndex].sensorKey }).map { $0.value.rounded() }
                     )
                     .frame(minHeight: 200)
 
