@@ -14,6 +14,7 @@
 - **Menu bar mode** — run as a compact menu bar app with quick controls
 - **Notifications** — get alerts when temperatures exceed thresholds
 - **Dashboard** — at-a-glance view of all fans and temperatures with gauges and graphs
+- **Graceful sleep/wake** — automatically restores system fan control before sleep and re-applies your settings on wake
 
 Lightweight — ~1–2% CPU on a 2019 i9 MacBook Pro, ~60 MB memory.
 

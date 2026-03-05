@@ -77,6 +77,17 @@ final class SMCMonitorService: ObservableObject {
         }
     }
 
+    func pausePolling() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    func resumePolling() {
+        guard timer == nil else { return }
+        startPolling()
+        poll()
+    }
+
     func setIdleMode(_ idle: Bool) {
         let target = idle ? idlePollInterval : pollInterval
         guard target != currentInterval else { return }

@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import SwiftUI
 import UserNotifications
@@ -73,6 +74,7 @@ struct TomsFansApp: App {
         notifications.setup()
         reapplySavedMode()
         observePollIntervalChanges()
+        observeSleepWake()
     }
 
     private func observePollIntervalChanges() {
@@ -80,6 +82,44 @@ struct TomsFansApp: App {
             .dropFirst()
             .sink { [weak monitor] interval in
                 monitor?.updatePollInterval(interval)
+            }
+            .store(in: &Self.cancellables)
+    }
+
+    private func observeSleepWake() {
+        let center = NSWorkspace.shared.notificationCenter
+
+        center.publisher(for: NSWorkspace.willSleepNotification)
+            .sink { [weak fanControl, weak curveEngine, weak monitor] _ in
+                fanControl?.restoreAutomatic()
+                curveEngine?.reset()
+                monitor?.pausePolling()
+            }
+            .store(in: &Self.cancellables)
+
+        center.publisher(for: NSWorkspace.didWakeNotification)
+            .sink { [weak monitor, weak fanControl, weak curveEngine, weak settings] _ in
+                monitor?.resumePolling()
+                // Re-apply saved control mode
+                guard let settings, let fanControl else { return }
+                switch settings.controlMode {
+                case .automatic:
+                    break
+                case .preset:
+                    if let presetId = settings.activePresetId,
+                       let preset = settings.presets.first(where: { $0.id == presetId }) {
+                        for (fanIndex, rpm) in preset.fanSpeeds {
+                            if preset.isForceMode {
+                                fanControl.setFanMode(fanIndex: fanIndex, mode: 1)
+                            }
+                            fanControl.setFanMinSpeed(fanIndex: fanIndex, rpm: rpm)
+                        }
+                    }
+                case .manual:
+                    settings.controlMode = .automatic
+                case .fanCurve:
+                    curveEngine?.reset()
+                }
             }
             .store(in: &Self.cancellables)
     }
