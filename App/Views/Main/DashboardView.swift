@@ -164,24 +164,43 @@ struct SensorSidebarView: View {
     }
 }
 
-struct TemperatureChartSection: View, Equatable {
+struct TemperatureChartSection: View {
     let chartSensorKeys: Set<String>
     let chartHistory: [String: [TemperatureReading]]
     let sensorNames: [String: String]
+    @Binding var chartRange: TemperatureHistoryRange
 
     var body: some View {
         GroupBox("Temperature History") {
-            if chartSensorKeys.isEmpty {
-                Text("Click a sensor to add it to the chart")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 180)
-            } else {
-                TemperatureChartView(
-                    sensorKeys: Array(chartSensorKeys),
-                    history: chartHistory,
-                    sensorNames: sensorNames
-                )
-                .frame(minHeight: 180)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Spacer()
+                    Picker("Time Range", selection: $chartRange) {
+                        ForEach(TemperatureHistoryRange.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .frame(width: 150)
+                }
+
+                if chartSensorKeys.isEmpty {
+                    Text("Click a sensor to add it to the chart")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 180)
+                } else {
+                    TemperatureChartView(
+                        sensorKeys: chartSensorKeys.sorted {
+                            (sensorNames[$0] ?? $0) < (sensorNames[$1] ?? $1)
+                        },
+                        history: chartHistory,
+                        sensorNames: sensorNames,
+                        range: chartRange
+                    )
+                    .frame(minHeight: 180)
+                }
             }
         }
     }
@@ -386,7 +405,11 @@ struct DashboardView: View {
                 TemperatureChartSection(
                     chartSensorKeys: chartSensorKeys,
                     chartHistory: monitor.chartHistory,
-                    sensorNames: monitor.sensorNames
+                    sensorNames: monitor.sensorNames,
+                    chartRange: Binding(
+                        get: { settings.temperatureHistoryRange },
+                        set: { settings.temperatureHistoryRange = $0 }
+                    )
                 )
 
                 if settings.controlMode == .manual {

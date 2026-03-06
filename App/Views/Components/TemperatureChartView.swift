@@ -4,11 +4,12 @@ struct TemperatureChartView: View {
     let sensorKeys: [String]
     let history: [String: [TemperatureReading]]
     let sensorNames: [String: String]
+    let range: TemperatureHistoryRange
 
     private static let palette: [Color] = [.blue, .orange, .green, .red, .purple, .cyan, .pink, .yellow]
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "HH:mm"
+        f.dateFormat = "m:ss"
         return f
     }()
     private let inset = EdgeInsets(top: 12, leading: 40, bottom: 40, trailing: 12)
@@ -19,8 +20,14 @@ struct TemperatureChartView: View {
             let plotW = max(geo.size.width - inset.leading - inset.trailing, 1)
             let plotH = max(geo.size.height - inset.top - inset.bottom, 1)
             let plot = CGRect(x: inset.leading, y: inset.top, width: plotW, height: plotH)
-            let allReadings = sensorKeys.compactMap { history[$0] }.flatMap { $0 }
-            let stats = ChartStats(readings: allReadings)
+            let window = chartWindow
+            let visibleHistory = filteredHistory(in: window)
+            let allReadings = sensorKeys.compactMap { visibleHistory[$0] }.flatMap { $0 }
+            let stats = ChartStats(
+                readings: allReadings,
+                minTime: window.lowerBound,
+                maxTime: window.upperBound
+            )
 
             Canvas { ctx, _ in
                 drawHorizontalGrid(ctx: ctx, plot: plot, stats: stats)
@@ -57,18 +64,18 @@ struct TemperatureChartView: View {
         let yFloor: Double
         let yCeil: Double
 
-        init(readings: [TemperatureReading]) {
+        init(readings: [TemperatureReading], minTime: Date, maxTime: Date) {
+            self.minTime = minTime
+            self.maxTime = maxTime
+
             guard !readings.isEmpty else {
-                minTemp = 0; maxTemp = 100; minTime = Date(); maxTime = Date()
+                minTemp = 0; maxTemp = 100
                 yStep = 10; yFloor = 0; yCeil = 100
                 return
             }
             let temps = readings.map(\.value)
-            let dates = readings.map(\.date)
             minTemp = temps.min()!
             maxTemp = temps.max()!
-            minTime = dates.min()!
-            maxTime = dates.max()!
 
             let rawRange = maxTemp - minTemp
             yStep = Self.niceStep(rawRange > 0 ? rawRange / 4 : 5)
@@ -102,6 +109,21 @@ struct TemperatureChartView: View {
         }
     }
 
+    private var chartWindow: ClosedRange<Date> {
+        let allReadings = sensorKeys.compactMap { history[$0] }.flatMap { $0 }
+        let windowEnd = allReadings.map(\.date).max() ?? Date()
+        let windowStart = windowEnd.addingTimeInterval(-range.duration)
+        return windowStart...windowEnd
+    }
+
+    private func filteredHistory(in window: ClosedRange<Date>) -> [String: [TemperatureReading]] {
+        Dictionary(uniqueKeysWithValues: sensorKeys.compactMap { key in
+            guard let readings = history[key] else { return nil }
+            let visibleReadings = readings.filter { window.contains($0.date) }
+            return (key, visibleReadings)
+        })
+    }
+
     // MARK: - Grid & Axes
 
     private func drawHorizontalGrid(ctx: GraphicsContext, plot: CGRect, stats: ChartStats) {
@@ -125,15 +147,10 @@ struct TemperatureChartView: View {
         let range = stats.maxTime.timeIntervalSince(stats.minTime)
         guard range > 0 else { return }
 
-        let cal = Calendar.current
-        // Start at first even minute >= minTime
-        var comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: stats.minTime)
-        if (comps.minute ?? 0) % 2 != 0 {
-            comps.minute = (comps.minute ?? 0) + 1
-        }
-        comps.second = 0
-        guard var tick = cal.date(from: comps) else { return }
-        if tick < stats.minTime { tick = tick.addingTimeInterval(120) }
+        let tickStride = self.range.axisTickInterval
+        let initialTick = floor(stats.minTime.timeIntervalSinceReferenceDate / tickStride) * tickStride
+        var tick = Date(timeIntervalSinceReferenceDate: initialTick)
+        if tick < stats.minTime { tick = tick.addingTimeInterval(tickStride) }
 
         while tick <= stats.maxTime {
             let norm = stats.xNormalized(tick)
@@ -147,7 +164,7 @@ struct TemperatureChartView: View {
             let label = Text(Self.timeFormatter.string(from: tick)).font(.system(size: 9)).foregroundColor(.secondary)
             ctx.draw(ctx.resolve(label), at: CGPoint(x: px, y: plot.maxY + 10), anchor: .center)
 
-            tick = tick.addingTimeInterval(120) // 2 minute stride
+            tick = tick.addingTimeInterval(tickStride)
         }
     }
 

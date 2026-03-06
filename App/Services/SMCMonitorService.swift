@@ -24,7 +24,7 @@ final class SMCMonitorService: ObservableObject {
     private var pollInterval: TimeInterval = 1.0
     private var currentInterval: TimeInterval = 1.0
     private let idlePollInterval: TimeInterval = 5.0
-    private let maxHistoryPoints = 1800
+    private let maxHistoryDuration = TemperatureHistoryRange.maximumDuration
     private var readingCounter = 0
     private var pollCount = 0
 
@@ -180,8 +180,8 @@ final class SMCMonitorService: ObservableObject {
                     self.fans = updatedFans
                 }
 
-                // Append history every 5th poll (~5s) to reduce chart rebuilds
-                if self.pollCount % 5 == 0, self.isCollectingHistory {
+                // Keep chart history at poll cadence now that the visible window is short.
+                if self.isCollectingHistory {
                     self.appendHistory(updatedTemps)
                 }
 
@@ -200,38 +200,25 @@ final class SMCMonitorService: ObservableObject {
         }
     }
 
-    private let chartTargetPoints = 150
-
     private func appendHistory(_ sensors: [TemperatureSensor]) {
         let now = Date()
+        let cutoff = now.addingTimeInterval(-maxHistoryDuration)
         readingCounter += 1
         for sensor in sensors {
             var readings = _fullHistory[sensor.key] ?? []
             readings.append(TemperatureReading(id: readingCounter, date: now, value: sensor.value))
-            if readings.count > maxHistoryPoints {
-                readings.removeFirst(readings.count - maxHistoryPoints)
+
+            if let firstRetainedIndex = readings.firstIndex(where: { $0.date >= cutoff }) {
+                if firstRetainedIndex > 0 {
+                    readings.removeFirst(firstRetainedIndex)
+                }
+            } else if !readings.isEmpty {
+                readings = Array(readings.suffix(1))
             }
+
             _fullHistory[sensor.key] = readings
         }
-        // Pre-downsample for chart consumption
-        var downsampled: [String: [TemperatureReading]] = [:]
-        for (key, readings) in _fullHistory {
-            if readings.count <= chartTargetPoints {
-                downsampled[key] = readings
-            } else {
-                let step = readings.count / chartTargetPoints
-                var sampled: [TemperatureReading] = []
-                sampled.reserveCapacity(chartTargetPoints + 1)
-                for i in Swift.stride(from: 0, to: readings.count, by: max(step, 1)) {
-                    sampled.append(readings[i])
-                }
-                if let last = readings.last, sampled.last?.id != last.id {
-                    sampled.append(last)
-                }
-                downsampled[key] = sampled
-            }
-        }
-        chartHistory = downsampled
+        chartHistory = _fullHistory
     }
 
     private func formatMenuBarLabel(_ sensors: [TemperatureSensor]) -> String {

@@ -1,6 +1,38 @@
 import Foundation
 import ServiceManagement
 
+enum TemperatureHistoryRange: Int, CaseIterable, Identifiable {
+    case oneMinute = 60
+    case threeMinutes = 180
+    case fiveMinutes = 300
+
+    var id: Self { self }
+
+    var duration: TimeInterval {
+        TimeInterval(rawValue)
+    }
+
+    var title: String {
+        switch self {
+        case .oneMinute: "1m"
+        case .threeMinutes: "3m"
+        case .fiveMinutes: "5m"
+        }
+    }
+
+    var axisTickInterval: TimeInterval {
+        switch self {
+        case .oneMinute: 15
+        case .threeMinutes: 30
+        case .fiveMinutes: 60
+        }
+    }
+
+    static var maximumDuration: TimeInterval {
+        TimeInterval(allCases.map(\.rawValue).max() ?? oneMinute.rawValue)
+    }
+}
+
 final class AppSettings: ObservableObject {
     @Published var presets: [FanPreset] {
         didSet { debouncedSave("presets", presets) }
@@ -34,6 +66,9 @@ final class AppSettings: ObservableObject {
     }
     @Published var pollInterval: TimeInterval {
         didSet { UserDefaults.standard.set(pollInterval, forKey: "pollInterval") }
+    }
+    @Published var temperatureHistoryRange: TemperatureHistoryRange {
+        didSet { UserDefaults.standard.set(temperatureHistoryRange.rawValue, forKey: "temperatureHistoryRange") }
     }
     @Published var showTemperatureInMenuBar: Bool {
         didSet { UserDefaults.standard.set(showTemperatureInMenuBar, forKey: "showTempMenuBar") }
@@ -76,6 +111,9 @@ final class AppSettings: ObservableObject {
             .flatMap { UUID(uuidString: $0) }
         let stored = UserDefaults.standard.double(forKey: "pollInterval")
         self.pollInterval = stored > 0 ? stored : 1.0
+        self.temperatureHistoryRange = TemperatureHistoryRange(
+            rawValue: UserDefaults.standard.integer(forKey: "temperatureHistoryRange")
+        ) ?? .oneMinute
         self.showTemperatureInMenuBar = UserDefaults.standard.object(forKey: "showTempMenuBar") as? Bool ?? true
         self.temperatureUnit = TemperatureUnit(rawValue:
             UserDefaults.standard.string(forKey: "tempUnit") ?? "celsius") ?? .celsius
